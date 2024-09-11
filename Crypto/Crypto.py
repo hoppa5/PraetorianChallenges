@@ -15,33 +15,27 @@ class GuessHandler(object):
     Handler for the creation of guesses from a crypto challenge
     '''
 
-    config = ConfigParser()
-
-    def __init__(self):
-        self.config.read('Passwords.ini')
-
     def handleChallenge0(self, data):
         '''
         Handle challenge 0 to get the challenges started
 
         This challenge gives you the answer, so nothing special here
         '''
-        return data[CHALLENGE_SECTION]
+        return data
     
-    def decryptCaeserCipher(self, shift, data):
+    def decryptCaeserCipher(self, data):
         '''
         Decrypts the ceaser cipher by shifting the provided data to solve
         challenge 1
 
         Parameters
         ----------
-        shift : int
-            The shift key for decrypting the ciphered data
         data : str
             The encrypted challenge data needing to be decrypted
         '''
-
+        
         result = ""
+        shift = 3
         print("Encrypted text: {}".format(data)) 
         
         for c in data:
@@ -56,24 +50,23 @@ class GuessHandler(object):
         print("Decrypted text: {}".format(result))
         return result
     
-    def convertBase64ToPng(self, data, dirName, fileName):
+    def convertBase64ToPng(self, data):
         '''
         Converts the base64 data to a png file to assist with solving challenge 2
 
         Parameters
         ----------
-        data : str
+        data : bytes
             base64 encoded data needing to be converted to a png file
-        dirName : str
-            The name of the directory that will hold the png file
-        fileName : str
-            The name of the png file that the data will be converted to
         '''
+        dirName = "Challenge2"
+        fileName = "img.png"
+
         if not os.path.exists(os.path.join(CURRENT_DIR, dirName)):
             os.makedirs(os.path.join(CURRENT_DIR, dirName))
 
         with open(os.path.join(CURRENT_DIR, dirName, fileName), "w") as pngFile:
-            pngFile.write(base64.urlsafe_b64decode(data))
+            pngFile.write(data.decode('base64'))
 
     def getGuess(self, n, data):
         '''
@@ -90,10 +83,11 @@ class GuessHandler(object):
 
         try:
             switch = {
-                    1: self.decryptCaeserCipher(3, data),
-                    2: self.convertBase64ToPng(data, "Challenge2", "img.png"),
-                    }
-            return switch[n]
+                0: self.handleChallenge0,
+                1: self.decryptCaeserCipher,
+                2: self.convertBase64ToPng,
+            }
+            return switch[n](data)
         except KeyError:
             return None
         
@@ -199,6 +193,7 @@ def main():
     apiHandler = APIHandler()
 
     for i in range(0, 3):
+        print("TEST: {}".format(i))
         handleLevel(i, guessHandler, apiHandler)
 
     print("\n------Displaying Hashes------")
