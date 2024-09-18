@@ -4,8 +4,6 @@ import base64
 import requests
 import os
 
-from configparser import ConfigParser
-
 hashes = {}
 CHALLENGE_SECTION = "challenge"
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -59,14 +57,21 @@ class GuessHandler(object):
         data : bytes
             base64 encoded data needing to be converted to a png file
         '''
+
         dirName = "Challenge2"
         fileName = "img.png"
+        offset = 22
 
         if not os.path.exists(os.path.join(CURRENT_DIR, dirName)):
             os.makedirs(os.path.join(CURRENT_DIR, dirName))
 
-        with open(os.path.join(CURRENT_DIR, dirName, fileName), "w") as pngFile:
-            pngFile.write(data.decode('base64'))
+        # Ensure we have a fresh img.png file to work with
+        filePath = os.path.join(CURRENT_DIR, dirName, fileName)
+        if os.path.isfile(filePath):
+            os.remove(filePath)
+
+        with open(os.path.join(filePath), "wb") as pngFile:
+            pngFile.write(base64.b64decode(data[offset:] + ('=' * (4 - (len(data) % 4))))) # add padding as necessary
 
     def getGuess(self, n, data):
         '''
@@ -151,19 +156,7 @@ class APIHandler(object):
         if resp.status_code != 200:
             raise Exception(resp.json()['detail'])
         return resp.json()
-
-def addHash(n, h):
-    '''
-    Adds a hash to the global hashes dictionary
-
-    Parameters
-    ----------
-    n : int
-        The challenge number
-    h : str
-        The hash that gets returned when a challenge is solved
-    '''
-    if 'hash' in h: hashes[n] = h['hash']
+    
 
 def handleLevel(n, guessHandler, apiHandler):
     '''
@@ -186,14 +179,13 @@ def handleLevel(n, guessHandler, apiHandler):
     guess = guessHandler.getGuess(n, data[CHALLENGE_SECTION])
     if guess:
         h = apiHandler.solve(n, guess)
-        addHash(n, h)
+        if 'hash' in h: hashes[n] = h['hash']
 
 def main():
     guessHandler = GuessHandler()
     apiHandler = APIHandler()
 
     for i in range(0, 3):
-        print("TEST: {}".format(i))
         handleLevel(i, guessHandler, apiHandler)
 
     print("\n------Displaying Hashes------")
