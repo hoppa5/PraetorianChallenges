@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import base64
 import requests
+import base64
 import os
+import re
 
 hashes = {}
 CHALLENGE_SECTION = "challenge"
@@ -12,6 +13,7 @@ class GuessHandler(object):
     '''
     Handler for the creation of guesses from a crypto challenge
     '''
+    CHALLENGE2_ANSWER_REGEX = "[A-Z][a-z]+[A-Z][a-z]+[A-Z][a-z]+"
 
     def handleChallenge0(self, data):
         '''
@@ -48,7 +50,7 @@ class GuessHandler(object):
         print("Decrypted text: {}".format(result))
         return result
     
-    def convertBase64ToPng(self, data):
+    def convertBase64ToPng(self, dirName, fileName, data):
         '''
         Converts the base64 data to a png file to assist with solving challenge 2
 
@@ -58,10 +60,6 @@ class GuessHandler(object):
             base64 encoded data needing to be converted to a png file
         '''
 
-        dirName = "Challenge2"
-        fileName = "img.png"
-        offset = 22
-
         if not os.path.exists(os.path.join(CURRENT_DIR, dirName)):
             os.makedirs(os.path.join(CURRENT_DIR, dirName))
 
@@ -70,8 +68,32 @@ class GuessHandler(object):
         if os.path.isfile(filePath):
             os.remove(filePath)
 
-        with open(os.path.join(filePath), "wb") as pngFile:
-            pngFile.write(base64.b64decode(data[offset:] + ('=' * (4 - (len(data) % 4))))) # add padding as necessary
+        with open(filePath, "wb") as pngFile:
+            pngFile.write(base64.b64decode(data + ('=' * (4 - (len(data) % 4))))) # add padding as necessary
+
+    def getAnswerFromPng(self, filePath):
+        '''
+        Uses the png file created in the method convertBase64ToPng to
+        get the answer to solve challenge 2
+
+        Parameter
+        ---------
+        filePath : str
+            path to the png file to get the answer from
+        '''
+
+        with open (filePath, "rb") as pngFile:
+            fileData = pngFile.read()
+            decodedFileData = fileData.decode('ascii', 'ignore')
+            return re.findall(self.CHALLENGE2_ANSWER_REGEX, decodedFileData)[-1]
+            
+    def handleChallenge2(self, data):
+        offset = 22
+        fileName = "img.png"
+        dirName = "Challenge2"
+        self.convertBase64ToPng(dirName, fileName, data[offset:])
+        return self.getAnswerFromPng(os.path.join(CURRENT_DIR, dirName, fileName))
+        
 
     def getGuess(self, n, data):
         '''
@@ -90,7 +112,7 @@ class GuessHandler(object):
             switch = {
                 0: self.handleChallenge0,
                 1: self.decryptCaeserCipher,
-                2: self.convertBase64ToPng,
+                2: self.handleChallenge2,
             }
             return switch[n](data)
         except KeyError:
@@ -179,7 +201,17 @@ def handleLevel(n, guessHandler, apiHandler):
     guess = guessHandler.getGuess(n, data[CHALLENGE_SECTION])
     if guess:
         h = apiHandler.solve(n, guess)
-        if 'hash' in h: hashes[n] = h['hash']
+        while 'hash' not in h:
+            i = 1
+            # trim the guess down a bit until it is valid.
+            # Challenge 2 has an issue where the guess could
+            # include an extra couple characters from binary data 
+            # after the answer that was converted to ASCII text
+            h = apiHandler.solve(n, guess[:-i])
+            i += 1
+
+        hashes[n] = h['hash']
+        
 
 def main():
     guessHandler = GuessHandler()
