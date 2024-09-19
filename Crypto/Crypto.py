@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from PIL import Image
+
 import requests
 import base64
 import os
@@ -13,7 +15,7 @@ class GuessHandler(object):
     '''
     Handler for the creation of guesses from a crypto challenge
     '''
-    CHALLENGE2_ANSWER_REGEX = "[A-Z][a-z]+[A-Z][a-z]+[A-Z][a-z]+"
+    CHALLENGE_ANSWER_REGEX = "[A-Z][a-z]+[A-Z][a-z]+[A-Z][a-z]+"
 
     def handleChallenge0(self, data):
         '''
@@ -85,15 +87,56 @@ class GuessHandler(object):
         with open (filePath, "rb") as pngFile:
             fileData = pngFile.read()
             decodedFileData = fileData.decode('ascii', 'ignore')
-            return re.findall(self.CHALLENGE2_ANSWER_REGEX, decodedFileData)[-1]
-            
+            return re.findall(self.CHALLENGE_ANSWER_REGEX, decodedFileData)[-1]
+
+    def convertPngToPpm(self, filePath):
+        '''
+        Converts a .png file to .ppm
+
+        Parameter
+        ---------
+        filePath : str
+            path to the file to be converted
+        ''' 
+        if not os.path.exists(filePath):
+            raise ValueError("The file path {} does not exist".format(filePath))
+        
+        image = Image.open(filePath)
+        ppmFilePath = os.path.splitext(filePath)[0] + ".ppm"
+        image.save(ppmFilePath, "PPM")
+        os.remove(filePath)
+
     def handleChallenge2(self, data):
+        '''
+        Handler to call methods to solve challenge 2
+
+        Parameter
+        ---------
+        data : str
+            The encoded text to be solved
+        '''
+
         offset = 22
         fileName = "img.png"
         dirName = "Challenge2"
         self.convertBase64ToPng(dirName, fileName, data[offset:])
         return self.getAnswerFromPng(os.path.join(CURRENT_DIR, dirName, fileName))
         
+    def handleChallenge3(self, data):
+        '''
+        Handler to call methods to solve challenge 3
+
+        Parameter
+        ---------
+        data : str
+            The encoded text to be solved
+        '''
+
+        offset = 22
+        fileName = "img.png"
+        dirName = "Challenge3"
+        self.convertBase64ToPng(dirName, fileName, data[offset:])
+        self.convertPngToPpm(os.path.join(dirName, fileName))
 
     def getGuess(self, n, data):
         '''
@@ -113,6 +156,7 @@ class GuessHandler(object):
                 0: self.handleChallenge0,
                 1: self.decryptCaeserCipher,
                 2: self.handleChallenge2,
+                3: self.handleChallenge3,
             }
             return switch[n](data)
         except KeyError:
@@ -217,7 +261,7 @@ def main():
     guessHandler = GuessHandler()
     apiHandler = APIHandler()
 
-    for i in range(0, 3):
+    for i in range(0, 4):
         handleLevel(i, guessHandler, apiHandler)
 
     print("\n------Displaying Hashes------")
