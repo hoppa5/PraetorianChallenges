@@ -8,24 +8,30 @@ import os
 import re
 
 hashes = {}
-CHALLENGE_SECTION = "challenge"
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+
+class Colors:
+    Red = '\x1b[31m'
+    Cyan = '\033[96m'
+    End = '\033[0m'
+
+def color_print(text, color):
+    return color + text + Colors.End
+
+class ChallengeException(Exception):
+    pass
 
 class GuessHandler(object):
     '''
     Handler for the creation of guesses from a crypto challenge
     '''
     CHALLENGE_ANSWER_REGEX = "[A-Z][a-z]+[A-Z][a-z]+[A-Z][a-z]+"
+    PNG_OFFSET = 22
+    PPM_OFFSET = 14
+    data = None
 
-    def handleChallenge0(self, data):
-        '''
-        Handle challenge 0 to get the challenges started
 
-        This challenge gives you the answer, so nothing special here
-        '''
-        return data
-    
-    def decryptCaeserCipher(self, data):
+    def decrypt_caeser_cipher(self):
         '''
         Decrypts the ceaser cipher by shifting the provided data to solve
         challenge 1
@@ -38,9 +44,8 @@ class GuessHandler(object):
         
         result = ""
         shift = 3
-        print("Encrypted text: {}".format(data)) 
         
-        for c in data:
+        for c in self.data:
             if c.isalpha():
                 if c.islower():
                     result += chr(((ord(c) - ord('a') + shift) % 26) + ord('a'))
@@ -49,10 +54,9 @@ class GuessHandler(object):
             else:
                 # Assuming non-alphabet characters can be preserved
                 result += c
-        print("Decrypted text: {}".format(result))
         return result
-    
-    def convertBase64ToPng(self, dirName, fileName, data):
+
+    def convert_base_64_to_png(self, dirName, fileName):
         '''
         Converts the base64 data to a png file to assist with solving challenge 2
 
@@ -61,6 +65,7 @@ class GuessHandler(object):
         data : bytes
             base64 encoded data needing to be converted to a png file
         '''
+        offsetData = self.data[self.PNG_OFFSET:]
 
         if not os.path.exists(os.path.join(CURRENT_DIR, dirName)):
             os.makedirs(os.path.join(CURRENT_DIR, dirName))
@@ -71,11 +76,11 @@ class GuessHandler(object):
             os.remove(filePath)
 
         with open(filePath, "wb") as pngFile:
-            pngFile.write(base64.b64decode(data + ('=' * (4 - (len(data) % 4))))) # add padding as necessary
+            pngFile.write(base64.b64decode(offsetData + ('=' * (4 - (len(offsetData) % 4))))) # add padding as necessary
 
-    def getAnswerFromPng(self, filePath):
+    def get_answer_from_png(self, filePath):
         '''
-        Uses the png file created in the method convertBase64ToPng to
+        Uses the png file created in the method convert_base_64_to_png to
         get the answer to solve challenge 2
 
         Parameter
@@ -89,7 +94,7 @@ class GuessHandler(object):
             decodedFileData = fileData.decode('ascii', 'ignore')
             return re.findall(self.CHALLENGE_ANSWER_REGEX, decodedFileData)[-1]
 
-    def convertPngToPpm(self, filePath):
+    def convert_png_to_ppm(self, filePath):
         '''
         Converts a .png file to .ppm
 
@@ -99,14 +104,14 @@ class GuessHandler(object):
             path to the file to be converted
         ''' 
         if not os.path.exists(filePath):
-            raise ValueError("The file path {} does not exist".format(filePath))
+            raise ChallengeException(color_print("The file path {} does not exist".format(filePath), Colors.Red))
         
         image = Image.open(filePath)
         ppmFilePath = os.path.splitext(filePath)[0] + ".ppm"
         image.save(ppmFilePath, "PPM")
         os.remove(filePath)
-    
-    def getAnswerFromPpm(self, filePath):
+
+    def get_answer_from_ppm(self, filePath):
         '''
         Parses through the ppm file binary converted to ascii text to find the answer
 
@@ -116,10 +121,9 @@ class GuessHandler(object):
             path to the file to be parsed
         '''
         with open (filePath, "rb") as ppmFile:
-            offset = 14 
             fileData = ppmFile.read()
             decodedFileData = fileData.decode('ascii', 'ignore')
-            decodedFileData = decodedFileData[offset:] # the content of the file's binary that should be parsed starts at this offset
+            decodedFileData = decodedFileData[self.PPM_OFFSET:] # the content of the file's binary that should be parsed starts at this offset
             wordCount = 0
             answer = ""
             for c in decodedFileData:
@@ -129,25 +133,46 @@ class GuessHandler(object):
                     if wordCount <= 3:
                         answer += c
                     else:
-                        return answer                
+                        return answer
 
-    def handleChallenge2(self, data):
+class ChallengeHandler(GuessHandler):
+    '''
+    Handler for the crypto challenges
+    '''
+    CHALLENGE_SECTION = "challenge"
+    
+    def handle_challenge0(self):
+        '''
+        Handle challenge 0 to get the challenges started
+
+        This challenge gives you the answer, so nothing special here
+        '''
+        return self.data
+    
+    def handle_challenge1(self):
+        '''
+        Handler to call methods to solve challenge 1
+        '''
+
+        return self.decrypt_caeser_cipher()
+    
+    def handle_challenge2(self):
         '''
         Handler to call methods to solve challenge 2
 
         Parameter
         ---------
         data : str
-            The encoded text to be solved
+            The encoded data to be solved
         '''
 
-        offset = 22
         fileName = "img.png"
         dirName = "Challenge2"
-        self.convertBase64ToPng(dirName, fileName, data[offset:])
-        return self.getAnswerFromPng(os.path.join(CURRENT_DIR, dirName, fileName))
-        
-    def handleChallenge3(self, data):
+
+        self.convert_base_64_to_png(dirName, fileName)
+        return self.get_answer_from_png(os.path.join(CURRENT_DIR, dirName, fileName))
+    
+    def handle_challenge3(self):
         '''
         Handler to call methods to solve challenge 3
 
@@ -157,39 +182,57 @@ class GuessHandler(object):
             The encoded text to be solved
         '''
 
-        offset = 22
         pngFileName = "img.png"
         ppmFileName = "img.ppm"
         dirName = "Challenge3"
 
-        self.convertBase64ToPng(dirName, pngFileName, data[offset:])
-        self.convertPngToPpm(os.path.join(dirName, pngFileName))
-        return self.getAnswerFromPpm(os.path.join(dirName, ppmFileName))
+        self.convert_base_64_to_png(dirName, pngFileName)
+        self.convert_png_to_ppm(os.path.join(dirName, pngFileName))
+        return self.get_answer_from_ppm(os.path.join(dirName, ppmFileName))
 
-    def getGuess(self, n, data):
+        
+    
+    def handle_challenge(self, n, apiHandler):
         '''
-        Makeshift switch statement to call the appropriate class method to solve 
-        a challenge
+        Handles fetching a challenges data and solving it
 
         Parameters
         ----------
         n : int
             The challenge number
-        data : str
-            The encoded text that needs to be decoded
+        apiHandler : class instance
+            instance of the APIHandler class
         '''
+        switch = {
+                0: self.handle_challenge0,
+                1: self.handle_challenge1,
+                2: self.handle_challenge2,
+                3: self.handle_challenge3,
+            }
+        
+        print(color_print("\n------Handling Challenge {}------".format(n), Colors.Cyan))
+        challengeData = apiHandler.fetch(n)
+        self.data = challengeData[self.CHALLENGE_SECTION]
 
         try:
-            switch = {
-                0: self.handleChallenge0,
-                1: self.decryptCaeserCipher,
-                2: self.handleChallenge2,
-                3: self.handleChallenge3,
-            }
-            return switch[n](data)
+            guess = switch[n]()
         except KeyError:
-            return None
-        
+            raise ChallengeException(color_print("\nError: {} is out of bounds for the challenge handler switch's size of {}".format(n, len(switch)), Colors.Red)) from None
+
+        if guess:
+            h = apiHandler.solve(n, guess)
+            while 'hash' not in h:
+                i = 1
+                # trim the guess down a bit until it is valid.
+                # Challenge 2 has an issue where the guess could
+                # include an extra couple characters from binary data 
+                # after the answer that was converted to ASCII text
+                h = apiHandler.solve(n, guess[:-i])
+                i += 1
+
+            hashes[n] = h['hash']
+            print(guess)
+
 class APIHandler(object):
     '''
     Handler for Praetorian's crypto challenge API.
@@ -228,7 +271,7 @@ class APIHandler(object):
         resp = requests.get(url, headers=self.token())
         resp.close()
         if resp.status_code != 200:
-            raise Exception(resp.json()['detail'])
+            raise ChallengeException(color_print(resp.json()['detail'], Colors.Red))
         return resp.json()
 
     def solve(self, n, guess):
@@ -248,51 +291,17 @@ class APIHandler(object):
         resp = requests.post(url, headers=self.token(), data=data)
         resp.close()
         if resp.status_code != 200:
-            raise Exception(resp.json()['detail'])
+            raise ChallengeException(color_print(resp.json()['detail'], Colors.Red))
         return resp.json()
-    
-
-def handleLevel(n, guessHandler, apiHandler):
-    '''
-    Handles fetching a challenges data and solving it
-
-    Parameters
-    ----------
-    n : int
-        The challenge number
-    guessHandler : class instance
-        instance of the GuessHandler class
-    apiHandler : class instance
-        instance of the APIHandler class
-    '''
-
-    print("\n------Handling level {}------".format(n))
-    data = apiHandler.fetch(n)
-    print(data)
-
-    guess = guessHandler.getGuess(n, data[CHALLENGE_SECTION])
-    if guess:
-        h = apiHandler.solve(n, guess)
-        while 'hash' not in h:
-            i = 1
-            # trim the guess down a bit until it is valid.
-            # Challenge 2 has an issue where the guess could
-            # include an extra couple characters from binary data 
-            # after the answer that was converted to ASCII text
-            h = apiHandler.solve(n, guess[:-i])
-            i += 1
-
-        hashes[n] = h['hash']
         
-
 def main():
-    guessHandler = GuessHandler()
+    challengeHandler = ChallengeHandler()
     apiHandler = APIHandler()
 
     for i in range(0, 4):
-        handleLevel(i, guessHandler, apiHandler)
+        challengeHandler.handle_challenge(i, apiHandler)
 
-    print("\n------Displaying Hashes------")
+    print(color_print("\n------Hashes------", Colors.Cyan))
     for k,v in hashes.items():
         print("Level {}: {}".format(k, v))
 
