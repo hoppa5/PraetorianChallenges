@@ -105,6 +105,31 @@ class GuessHandler(object):
         ppmFilePath = os.path.splitext(filePath)[0] + ".ppm"
         image.save(ppmFilePath, "PPM")
         os.remove(filePath)
+    
+    def getAnswerFromPpm(self, filePath):
+        '''
+        Parses through the ppm file binary converted to ascii text to find the answer
+
+        Parameter
+        ---------
+        filePath : str
+            path to the file to be parsed
+        '''
+        with open (filePath, "rb") as ppmFile:
+            offset = 14 
+            fileData = ppmFile.read()
+            decodedFileData = fileData.decode('ascii', 'ignore')
+            decodedFileData = decodedFileData[offset:] # the content of the file's binary that should be parsed starts at this offset
+            wordCount = 0
+            answer = ""
+            for c in decodedFileData:
+                if c.isalpha():
+                    if c.isupper():
+                        wordCount += 1
+                    if wordCount <= 3:
+                        answer += c
+                    else:
+                        return answer                
 
     def handleChallenge2(self, data):
         '''
@@ -133,10 +158,13 @@ class GuessHandler(object):
         '''
 
         offset = 22
-        fileName = "img.png"
+        pngFileName = "img.png"
+        ppmFileName = "img.ppm"
         dirName = "Challenge3"
-        self.convertBase64ToPng(dirName, fileName, data[offset:])
-        self.convertPngToPpm(os.path.join(dirName, fileName))
+
+        self.convertBase64ToPng(dirName, pngFileName, data[offset:])
+        self.convertPngToPpm(os.path.join(dirName, pngFileName))
+        return self.getAnswerFromPpm(os.path.join(dirName, ppmFileName))
 
     def getGuess(self, n, data):
         '''
