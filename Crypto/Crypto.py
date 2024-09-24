@@ -30,16 +30,10 @@ class GuessHandler(object):
     PPM_OFFSET = 14
     data = None
 
-
     def decrypt_caeser_cipher(self):
         '''
         Decrypts the ceaser cipher by shifting the provided data to solve
         challenge 1
-
-        Parameters
-        ----------
-        data : str
-            The encrypted challenge data needing to be decrypted
         '''
         
         result = ""
@@ -62,8 +56,10 @@ class GuessHandler(object):
 
         Parameters
         ----------
-        data : bytes
-            base64 encoded data needing to be converted to a png file
+        dirName : str
+            the name of the directory to save the png file in
+        fileName : str
+            name of the png file the base64 data will be converted to
         '''
         offsetData = self.data[self.PNG_OFFSET:]
 
@@ -159,11 +155,6 @@ class ChallengeHandler(GuessHandler):
     def handle_challenge2(self):
         '''
         Handler to call methods to solve challenge 2
-
-        Parameter
-        ---------
-        data : str
-            The encoded data to be solved
         '''
 
         fileName = "img.png"
@@ -175,11 +166,6 @@ class ChallengeHandler(GuessHandler):
     def handle_challenge3(self):
         '''
         Handler to call methods to solve challenge 3
-
-        Parameter
-        ---------
-        data : str
-            The encoded text to be solved
         '''
 
         pngFileName = "img.png"
@@ -190,7 +176,11 @@ class ChallengeHandler(GuessHandler):
         self.convert_png_to_ppm(os.path.join(dirName, pngFileName))
         return self.get_answer_from_ppm(os.path.join(dirName, ppmFileName))
 
-        
+    def handle_challenge4(self):
+        '''
+        Handler to call methods to solve challenge 3
+        '''
+        pass
     
     def handle_challenge(self, n, apiHandler):
         '''
@@ -208,10 +198,13 @@ class ChallengeHandler(GuessHandler):
                 1: self.handle_challenge1,
                 2: self.handle_challenge2,
                 3: self.handle_challenge3,
+                4: self.handle_challenge4,
             }
         
         print(color_print("\n------Handling Challenge {}------".format(n), Colors.Cyan))
         challengeData = apiHandler.fetch(n)
+        if n == 4:
+            print(challengeData)
         self.data = challengeData[self.CHALLENGE_SECTION]
 
         try:
@@ -298,7 +291,7 @@ def main():
     challengeHandler = ChallengeHandler()
     apiHandler = APIHandler()
 
-    for i in range(0, 4):
+    for i in range(0, 5):
         challengeHandler.handle_challenge(i, apiHandler)
 
     print(color_print("\n------Hashes------", Colors.Cyan))
